@@ -1,6 +1,5 @@
-mod entry;
 use bytes::Bytes;
-use crate::entry::Entry;
+use lsm_tree::entry::Entry;
 
 pub fn main() {
     let mut vec: Vec<Entry> = Vec::new();
