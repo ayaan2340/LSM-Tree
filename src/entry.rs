@@ -43,6 +43,9 @@ impl EntryComparator {
 
 impl KeyComparator<Entry> for EntryComparator {
     fn compare(&self, first: &Entry, second: &Entry) -> Ordering {
-        return self.comp.compare(&first.key, &second.key);
+       match self.comp.compare(&first.key, &second.key) {
+            Ordering::Equal => second.val.version.cmp(&first.val.version),
+            ordering => ordering,
+        }
     }
 }
