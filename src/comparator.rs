@@ -9,6 +9,6 @@ pub struct BytewiseComparator {}
 
 impl KeyComparator<Bytes> for BytewiseComparator{
     fn compare(&self, first: &Bytes, second: &Bytes) -> Ordering {
-        first.cmp(second);
+        first.cmp(second)
     }
 }
