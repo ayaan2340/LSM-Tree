@@ -1,6 +1,9 @@
-use crate::skipnode::{SkipEntry, SkipNode};
+pub mod rng;
+pub mod skipnode;
+
+use self::skipnode::{SkipEntry, SkipNode};
 use crate::entry::EntryComparator;
-use crate::rng::SeededRng;
+use self::rng::SeededRng;
 use bytes::Bytes;
 
 pub struct SkipList {

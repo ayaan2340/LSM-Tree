@@ -1,25 +1,26 @@
-use rand::{Rng, SeedableRng};
+use rand::{SeedableRng};
 use rand::rngs::StdRng;
+use rand::RngExt;
 
-pub struct SeedableRng {
+pub struct SeededRng {
     rng: StdRng,
     seed: u64,
 }
 
-impl SeedableRng {
-    pub fn new(seed: u64) -> SeedableRng {
-        SeedableRng {
-            StdRng::seed_from_u64(seed),
-            seed
+impl SeededRng {
+    pub fn new(seed: u64) -> SeededRng {
+        SeededRng {
+            rng: StdRng::seed_from_u64(seed),
+            seed,
         }
     }
 
-    pub fn from_entropy() -> SeedableRng {
-        let seed: u64 = rand::thread_rng().gen();
-        SeedableRng::new(seed);
+    pub fn from_entropy() -> SeededRng {
+        let seed: u64 = rand::rng().random();
+        SeededRng::new(seed)
     }
 
-    pub fn view_seed() -> u64 {
+    pub fn view_seed(&self) -> u64 {
         self.seed
     }
 }

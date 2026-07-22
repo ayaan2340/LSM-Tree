@@ -1,7 +1,7 @@
 use crate::entry::Entry;
 
 pub struct SkipEntry {
-    pub entry: Entry,
+    entry: Entry,
 }
 
 impl SkipEntry {
@@ -10,9 +10,10 @@ impl SkipEntry {
             entry,
         }
     }
+
 }
 
-pub struct SkipNode {
+pub(crate) struct SkipNode {
     entry: Option<SkipEntry>,
     forward: Vec<Option<usize>>,
 }
@@ -20,15 +21,27 @@ pub struct SkipNode {
 impl SkipNode {
     pub fn new(entry: SkipEntry) -> SkipNode {
         SkipNode {
-            entry,
+            entry: Some(entry),
             forward: Vec::new(),
         }
     }
 
     pub fn dummy() -> SkipNode {
         SkipNode {
-            entry: (),
+            entry: None,
             forward: Vec::new(),
         }
+    }
+
+    pub(crate) fn get_entry(&self) -> &Option<SkipEntry> {
+        &self.entry
+    }
+
+    pub(crate) fn get_forward(&self) -> &Vec<Option<usize>> {
+        &self.forward
+    }
+
+    pub(crate) fn get_forward_mut(&mut self) -> &mut Vec<Option<usize>> {
+        &mut self.forward
     }
 }
