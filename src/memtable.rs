@@ -1,7 +1,6 @@
 use std::sync::{RwLock};
 use crate::skiplist::SkipList;
 use crate::skiplist::skipnode::SkipEntry;
-
 struct MemtableInner {
     skiplist: SkipList,
 }

@@ -2,7 +2,7 @@ use rand::{SeedableRng};
 use rand::rngs::StdRng;
 use rand::RngExt;
 
-pub struct SeededRng {
+pub(crate) struct SeededRng {
     rng: StdRng,
     seed: u64,
 }
@@ -22,5 +22,9 @@ impl SeededRng {
 
     pub fn view_seed(&self) -> u64 {
         self.seed
+    }
+
+    pub fn coinflip(&mut self) -> bool {
+        self.rng.random_bool(0.5)
     }
 }
