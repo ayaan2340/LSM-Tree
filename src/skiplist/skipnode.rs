@@ -11,6 +11,10 @@ impl SkipEntry {
         }
     }
 
+    pub fn entry(&self) -> &Entry {
+        &self.entry
+    }
+
 }
 
 pub(crate) struct SkipNode {
