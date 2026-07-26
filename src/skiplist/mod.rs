@@ -5,8 +5,9 @@ use self::skipnode::{SkipEntry, SkipNode};
 use crate::entry::EntryComparator;
 use self::rng::SeededRng;
 use bytes::Bytes;
+use std::cmp::Ordering;
 
-pub struct SkipList {
+pub(crate) struct SkipList {
     node_list: Vec<SkipNode>,
     max_height: usize,
     comparator: EntryComparator,
@@ -35,11 +36,19 @@ impl SkipList {
         Ok(())
     }
 
-    pub fn search(&self, key: Bytes) {
+    pub fn search(&self, key: &Bytes) -> &SkipNode {
 
     }
 
-    pub fn lookup(&self, key: Bytes) -> Option<SkipEntry> {
-    
+    pub fn lookup(&self, key: &Bytes) -> Option<&SkipEntry> {
+        let node: &SkipNode = self.search(key);
+        if let Some(entry) = node.get_entry() {
+            let e = entry.entry();
+            match e.key.cmp(key) {
+                Ordering::Equal => Some(entry),
+                _ => None,
+            }
+        } else { return None }
+
     }
 }
