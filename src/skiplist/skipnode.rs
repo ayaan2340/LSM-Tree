@@ -1,5 +1,6 @@
 use crate::entry::Entry;
 
+#[derive(Clone)]
 pub struct SkipEntry {
     entry: Entry,
 }
