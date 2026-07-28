@@ -38,6 +38,13 @@ impl SkipNode {
         }
     }
 
+    pub fn dummy_height(height: usize) -> SkipNode {
+        SkipNode {
+            entry: None,
+            forward: vec![None; height],
+        }
+    }
+
     pub(crate) fn get_entry(&self) -> &Option<SkipEntry> {
         &self.entry
     }

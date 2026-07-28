@@ -2,7 +2,7 @@ use rand::{SeedableRng};
 use rand::rngs::StdRng;
 use rand::RngExt;
 
-pub(crate) struct SeededRng {
+pub struct SeededRng {
     rng: StdRng,
     seed: u64,
 }

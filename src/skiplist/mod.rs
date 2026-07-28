@@ -21,7 +21,7 @@ pub(crate) struct SkipList {
 impl SkipList {
     pub fn new(max_height: usize, comparator: EntryComparator, rng: SeededRng) -> SkipList {
         SkipList {
-            node_list: vec!(SkipNode::dummy()),
+            node_list: vec!(SkipNode::dummy_height(max_height)),
             max_height,
             comparator,
             entry_count: 0,
@@ -93,17 +93,18 @@ impl SkipList {
         pred
     }
 
+    // Loop for searching through skiplist level for find_predecessors(),
+    // Uses EntryComparator to keep sorted order for list including key and version
     fn should_move_forward_entry(&self, node: &SkipNode, new_entry: &SkipEntry, curr_level: usize) -> bool {
-        let next_exists: bool = node.get_forward()[curr_level].is_some(); 
-        match node.get_entry() {
-            None if next_exists => true,
-            Some(entry) if next_exists => self.comparator.compare(entry.entry(), new_entry.entry()) == Ordering::Less,
-            _ => false,
-        }
+        node.get_forward()[curr_level]
+            .and_then(|idx| self.node_list[idx].get_entry().as_ref())
+            .map(|next_entry|  self.comparator.compare(next_entry.entry(), new_entry.entry()) == Ordering::Less)
+            .unwrap_or(false)
     }
+
     // Returns index into node_list
     pub fn search(&self, key: &Bytes) -> usize {
-        let mut curr_level: usize = self.max_height - 1;
+        let mut curr_level: usize = self.max_height;
         let mut curr_idx: usize = 0;
         while curr_level > 0 {
             curr_level -= 1;
@@ -118,16 +119,16 @@ impl SkipList {
         curr_idx
     }
 
+    // Loop for searching through skiplist level for search(),
+    // Uses less than or equal to key comparisons to find last version of a key
     fn should_move_forward(&self, node: &SkipNode, key: &Bytes, curr_level: usize) -> bool {
-        let next_exists: bool = node.get_forward()[curr_level].is_some(); 
-        match node.get_entry() {
-            None if next_exists => true,
-            Some(entry) if next_exists => entry.entry().key.cmp(key) == Ordering::Less,
-            _ => false,
-        }
+        node.get_forward()[curr_level]
+            .and_then(|idx| self.node_list[idx].get_entry().as_ref())
+            .map(|next_entry| next_entry.entry().key.cmp(key) == Ordering::Less)
+            .unwrap_or(false)
     }
 
-    // Returns entry if matching key found in skiplist
+    // Returns latest entry if matching key found in skiplist
     pub fn lookup(&self, key: &Bytes) -> Option<&SkipEntry> {
         let node: &SkipNode = &self.node_list[self.search(key)];
         if let Some(entry) = node.get_entry() {
@@ -136,9 +137,86 @@ impl SkipList {
                 Ordering::Equal => Some(entry),
                 _ => None,
             }
-        } else { 
+        } else {
             None
         }
 
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::{make_entry, make_tombstone, make_skiplist};
+
+    fn insert(sl: &mut SkipList, key: &str, val: &str) {
+        sl.insert(SkipEntry::new(make_entry(key, val)));
+    }
+
+    fn lookup<'a>(sl: &'a SkipList, key: &str) -> Option<&'a SkipEntry> {
+        sl.lookup(&Bytes::from(key.to_owned()))
+    }
+
+    #[test]
+    fn lookup_on_empty_skiplist_returns_none() {
+        let sl = make_skiplist();
+        assert!(lookup(&sl, "missing").is_none());
+    }
+
+    #[test]
+    fn insert_single_entry_lookup_finds_it() {
+        let mut sl = make_skiplist();
+        insert(&mut sl, "key", "val");
+        let result = lookup(&sl, "key").expect("expected entry to be found");
+        assert_eq!(result.entry().key, Bytes::from("key"));
+        assert_eq!(result.entry().val.value, Bytes::from("val"));
+    }
+
+    #[test]
+    fn lookup_missing_key_returns_none() {
+        let mut sl = make_skiplist();
+        insert(&mut sl, "key", "val");
+        assert!(lookup(&sl, "other").is_none());
+    }
+
+    #[test]
+    fn insert_multiple_unsorted_all_found() {
+        let mut sl = make_skiplist();
+        let keys = ["delta", "alpha", "charlie", "bravo", "echo"];
+        for key in &keys {
+            insert(&mut sl, key, "val");
+        }
+        for key in &keys {
+            assert!(lookup(&sl, key).is_some(), "missing key: {key}");
+        }
+    }
+
+    #[test]
+    fn entry_count_increments_per_insert() {
+        let mut sl = make_skiplist();
+        assert_eq!(0, sl.entry_count());
+        insert(&mut sl, "a", "val");
+        assert_eq!(1, sl.entry_count());
+        insert(&mut sl, "b", "val");
+        assert_eq!(2, sl.entry_count());
+    }
+
+    #[test]
+    fn byte_size_increases_per_insert() {
+        let mut sl = make_skiplist();
+        assert_eq!(0, sl.byte_size());
+        insert(&mut sl, "a", "val");
+        let after_one = sl.byte_size();
+        assert!(after_one > 0);
+        insert(&mut sl, "bb", "val");
+        assert!(sl.byte_size() > after_one);
+    }
+
+    #[test]
+    fn insert_tombstone_is_found_by_lookup() {
+        let mut sl = make_skiplist();
+        sl.insert(SkipEntry::new(make_tombstone("gone")));
+        let result = lookup(&sl, "gone").expect("tombstone entry should be found");
+        assert!(result.entry().is_tombstone());
     }
 }
