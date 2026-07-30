@@ -18,10 +18,10 @@ pub(crate) fn make_tombstone(key: &str) -> Entry {
     Entry::new(Bytes::from(key.to_owned()), Bytes::new(), TOMBSTONE)
 }
 
-pub(crate) fn make_versioned_entry(key: &str, val: &str, version: u64) -> Entry {
+pub(crate) fn make_versioned_entry(key: &str, val: &str, sequence_number: u64) -> Entry {
     Entry {
         key: Bytes::from(key.to_owned()),
-        val: Value { value: Bytes::from(val.to_owned()), metadata: 0, version },
+        val: Value { value: Bytes::from(val.to_owned()), metadata: 0, sequence_number },
     }
 }
 

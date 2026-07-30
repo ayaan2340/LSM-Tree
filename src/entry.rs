@@ -15,7 +15,7 @@ pub struct Entry {
 pub struct Value {
     pub value: Bytes,
     pub(crate) metadata: u8,
-    pub(crate) version: u64,
+    pub(crate) sequence_number: u64,
 }
 
 impl Entry {
@@ -25,7 +25,7 @@ impl Entry {
             val: Value {
                 value,
                 metadata,
-                version: 0,
+                sequence_number: 0,
             },
         }
     }
@@ -51,7 +51,7 @@ impl EntryComparator {
 impl KeyComparator<Entry> for EntryComparator {
     fn compare(&self, first: &Entry, second: &Entry) -> Ordering {
        match self.comp.compare(&first.key, &second.key) {
-            Ordering::Equal => second.val.version.cmp(&first.val.version),
+            Ordering::Equal => second.val.sequence_number.cmp(&first.val.sequence_number),
             ordering => ordering,
         }
     }
@@ -71,7 +71,7 @@ mod tests {
         assert_eq!(key, entry.key);
         assert_eq!(value, entry.val.value);
         assert_eq!(0, entry.val.metadata);
-        assert_eq!(0, entry.val.version);
+        assert_eq!(0, entry.val.sequence_number);
     }
 
     #[test]

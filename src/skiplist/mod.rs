@@ -18,6 +18,20 @@ pub(crate) struct SkipList {
     rng: SeededRng,
 }
 
+pub(crate) struct SkipListIter<'a> {
+    node_list: &'a Vec<SkipNode>,
+    idx: usize,
+}
+
+impl Iterator for SkipListIter {
+    type Item = &'a SkipEntry;
+    fn next(&self) -> SkipEntry {
+        
+        let next_node: &SkipNode = &self.node_list[self.node_list[self.idx].get_forward()[0]];
+        self.idx += 1;
+        next_node.and_then()
+    }
+}
 impl SkipList {
     pub fn new(max_height: usize, comparator: EntryComparator, rng: SeededRng) -> SkipList {
         SkipList {
