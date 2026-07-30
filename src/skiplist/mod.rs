@@ -130,17 +130,10 @@ impl SkipList {
 
     // Returns latest entry if matching key found in skiplist
     pub fn lookup(&self, key: &Bytes) -> Option<&SkipEntry> {
-        let node: &SkipNode = &self.node_list[self.search(key)];
-        if let Some(entry) = node.get_entry() {
-            let e = entry.entry();
-            match e.key.cmp(key) {
-                Ordering::Equal => Some(entry),
-                _ => None,
-            }
-        } else {
-            None
-        }
-
+        let prev_node: &SkipNode = &self.node_list[self.search(key)];
+        prev_node.get_forward()[0]
+                 .and_then(|idx| self.node_list[idx].get_entry().as_ref())
+                 .filter(|entry| entry.entry().key.cmp(key) == Ordering::Equal)
     }
 }
 
