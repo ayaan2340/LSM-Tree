@@ -23,15 +23,16 @@ pub(crate) struct SkipListIter<'a> {
     idx: usize,
 }
 
-impl Iterator for SkipListIter {
+impl<'a> Iterator for SkipListIter<'a> {
     type Item = &'a SkipEntry;
-    fn next(&self) -> SkipEntry {
-        
-        let next_node: &SkipNode = &self.node_list[self.node_list[self.idx].get_forward()[0]];
+    fn next(&mut self) -> Option<Self::Item> {
+        use skipnode::{SkipNode};
         self.idx += 1;
-        next_node.and_then()
+        SkipNode::get_forward(&self.node_list[self.idx - 1])[0]
+                 .and_then(|next_idx| SkipNode::get_entry(&self.node_list[next_idx]).as_ref())
     }
 }
+
 impl SkipList {
     pub fn new(max_height: usize, comparator: EntryComparator, rng: SeededRng) -> SkipList {
         SkipList {
@@ -148,6 +149,13 @@ impl SkipList {
         prev_node.get_forward()[0]
                  .and_then(|idx| self.node_list[idx].get_entry().as_ref())
                  .filter(|entry| entry.entry().key.cmp(key) == Ordering::Equal)
+    }
+
+    pub fn iter(&self) -> SkipListIter {
+        SkipListIter {
+            node_list: &self.node_list,
+            idx: 0,
+        }
     }
 }
 
