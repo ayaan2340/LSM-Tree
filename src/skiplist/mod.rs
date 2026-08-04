@@ -2,12 +2,13 @@ pub mod rng;
 pub mod skipnode;
 
 use self::skipnode::{SkipEntry, SkipNode};
-use crate::entry::{EntryComparator, Entry};
+use crate::entry::{EntryComparator, Entry, Value};
 use crate::comparator::KeyComparator;
 use self::rng::SeededRng;
 use bytes::Bytes;
 use std::cmp::Ordering;
 use std::mem::size_of;
+use crate::iterator::StorageIterator;
 
 pub(crate) struct SkipList {
     node_list: Vec<SkipNode>,
@@ -21,15 +22,37 @@ pub(crate) struct SkipList {
 pub(crate) struct SkipListIter<'a> {
     node_list: &'a Vec<SkipNode>,
     idx: usize,
+    current: Option<SkipEntry>,
 }
 
-impl<'a> Iterator for SkipListIter<'a> {
-    type Item = &'a SkipEntry;
-    fn next(&mut self) -> Option<Self::Item> {
-        use skipnode::{SkipNode};
-        self.idx += 1;
-        SkipNode::get_forward(&self.node_list[self.idx - 1])[0]
-                 .and_then(|next_idx| SkipNode::get_entry(&self.node_list[next_idx]).as_ref())
+impl<'a> StorageIterator for SkipListIter<'a> {
+    type Error = ();
+    fn key(&self) -> &[u8] {
+       &self.current.as_ref().expect("key() called on an invalid iterator").entry().key
+    }
+
+    fn value(&self) -> &Value {
+       &self.current.as_ref().expect("value() called on an invalid iterator").entry().val
+    }
+
+    fn is_valid(&self) -> bool {
+        self.current.is_some()
+    }
+
+    fn next(&mut self) -> Result<(), Self::Error> {
+       if let Some(next_idx) = self.node_list[self.idx].get_forward()[0] {
+            self.idx = next_idx;
+            self.current = self.node_list[next_idx].get_entry().clone();
+       }
+        Ok(())
+    }
+
+    // Caller responsibility to check version of entry
+    fn seek(&mut self, key: &[u8]) -> Result<(), Self::Error> {
+        while self.key() < key {
+           self.next(); 
+        }
+        Ok(())
     }
 }
 
@@ -155,6 +178,7 @@ impl SkipList {
         SkipListIter {
             node_list: &self.node_list,
             idx: 0,
+            current: self.node_list[0].get_entry().clone(),
         }
     }
 }
