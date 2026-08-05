@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub mod comparator;
 pub mod entry;
 pub mod skiplist;

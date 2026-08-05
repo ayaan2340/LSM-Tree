@@ -1,3 +1,5 @@
+use crate::entry::Value;
+
 pub(crate) trait StorageIterator {
     type Error;
     fn key(&self) -> &[u8];

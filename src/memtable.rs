@@ -1,7 +1,8 @@
-use std::sync::{RwLock};
-use crate::skiplist::SkipList;
+use std::sync::{RwLock, RwLockReadGuard};
+use crate::iterator::StorageIterator;
+use crate::skiplist::{SkipList};
 use crate::skiplist::skipnode::SkipEntry;
-use crate::entry::EntryComparator;
+use crate::entry::{EntryComparator, Value};
 use crate::skiplist::rng::SeededRng;
 use bytes::Bytes;
 
@@ -17,10 +18,51 @@ impl MemtableInner {
     }
 }
 
-pub struct Memtable {
+pub(crate) struct Memtable {
     id: u64,
     inner: RwLock<MemtableInner>,
 }
+
+pub(crate) struct MemtableIter<'a> {
+    guard: RwLockReadGuard<'a, MemtableInner>,
+    idx: usize,
+    current: Option<SkipEntry>
+}
+
+impl<'a> StorageIterator for MemtableIter<'a> {
+    type Error = ();
+    fn key(&self) -> &[u8] {
+       &self.current.as_ref().expect("key() called on an invalid iterator").entry().key
+    }
+
+    fn value(&self) -> &Value {
+       &self.current.as_ref().expect("value() called on an invalid iterator").entry().val
+    }
+
+    fn is_valid(&self) -> bool {
+        self.current.is_some()
+    }
+
+    fn next(&mut self) -> Result<(), Self::Error> {
+       if let Some(next_idx) = self.guard.skiplist.node_list[self.idx].get_forward()[0] {
+            self.idx = next_idx;
+            self.current = self.guard.skiplist.node_list[next_idx].get_entry().clone();
+       } else {
+            self.current = None;
+        }
+        Ok(())
+    }
+
+    // Caller responsibility to check version of entry
+    fn seek(&mut self, key: &[u8]) -> Result<(), Self::Error> {
+        while self.is_valid() && self.key() < key {
+           let _ = self.next(); 
+        }
+        Ok(())
+    }
+}
+
+
 
 impl Memtable {
     pub fn new(id: u64, max_height: usize, comparator: EntryComparator, rng: SeededRng) -> Memtable {
@@ -51,6 +93,18 @@ impl Memtable {
         let read_guard = self.inner.read().unwrap();
         read_guard.skiplist.byte_size()
     }
+
+    pub fn iter(&self) -> MemtableIter<'_> {
+        let read_guard: RwLockReadGuard<MemtableInner> = self.inner.read().unwrap();
+        // First index is the node after the dummy head node
+        let first_idx: usize = read_guard.skiplist.node_list[0].get_forward()[0].unwrap_or(0);
+        let first_entry: Option<SkipEntry> = read_guard.skiplist.node_list[first_idx].get_entry().clone();
+        MemtableIter {
+            guard: read_guard,
+            idx: first_idx,
+            current: first_entry,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -65,6 +119,90 @@ mod tests {
 
     fn lookup(mt: &Memtable, key: &str) -> Option<SkipEntry> {
         mt.lookup(&Bytes::from(key.to_owned()))
+    }
+
+    fn collect_keys(mt: &Memtable) -> Vec<Vec<u8>> {
+        let mut iter = mt.iter();
+        let mut keys = vec![];
+        while iter.is_valid() {
+            keys.push(iter.key().to_vec());
+            iter.next().unwrap();
+        }
+        keys
+    }
+
+    #[test]
+    fn iter_on_empty_memtable_is_invalid() {
+        let mt = make_memtable(0);
+        assert!(!mt.iter().is_valid());
+    }
+
+    #[test]
+    fn iter_single_entry_key_and_value_correct() {
+        let mt = make_memtable(0);
+        insert(&mt, "key", "val");
+        let iter = mt.iter();
+        assert!(iter.is_valid());
+        assert_eq!(iter.key(), b"key");
+        assert_eq!(iter.value().value, Bytes::from("val"));
+    }
+
+    #[test]
+    fn iter_traverses_in_sorted_order() {
+        let mt = make_memtable(0);
+        let keys_unsorted = ["delta", "alpha", "charlie", "bravo", "echo"];
+        for key in &keys_unsorted {
+            insert(&mt, key, "val");
+        }
+        let collected = collect_keys(&mt);
+        let mut expected: Vec<Vec<u8>> = keys_unsorted.iter().map(|k| k.as_bytes().to_vec()).collect();
+        expected.sort();
+        assert_eq!(collected, expected);
+    }
+
+    #[test]
+    fn iter_next_past_end_is_invalid() {
+        let mt = make_memtable(0);
+        insert(&mt, "only", "val");
+        let mut iter = mt.iter();
+        assert!(iter.is_valid());
+        iter.next().unwrap();
+        assert!(!iter.is_valid());
+    }
+
+    #[test]
+    fn seek_lands_on_exact_key() {
+        let mt = make_memtable(0);
+        for key in &["alpha", "bravo", "charlie"] {
+            insert(&mt, key, "val");
+        }
+        let mut iter = mt.iter();
+        iter.seek(b"bravo").unwrap();
+        assert!(iter.is_valid());
+        assert_eq!(iter.key(), b"bravo");
+    }
+
+    #[test]
+    fn seek_lands_on_next_greater_when_exact_missing() {
+        let mt = make_memtable(0);
+        for key in &["alpha", "charlie", "echo"] {
+            insert(&mt, key, "val");
+        }
+        let mut iter = mt.iter();
+        iter.seek(b"bravo").unwrap();
+        assert!(iter.is_valid());
+        assert_eq!(iter.key(), b"charlie");
+    }
+
+    #[test]
+    fn seek_past_all_keys_is_invalid() {
+        let mt = make_memtable(0);
+        for key in &["alpha", "bravo"] {
+            insert(&mt, key, "val");
+        }
+        let mut iter = mt.iter();
+        iter.seek(b"zzzz").unwrap();
+        assert!(!iter.is_valid());
     }
 
     #[test]
