@@ -35,6 +35,7 @@ impl Entry {
     }
 }
 
+#[derive(Clone)]
 pub struct EntryComparator {
     comp: Arc<dyn KeyComparator<Bytes>>,
 }
