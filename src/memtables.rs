@@ -66,7 +66,7 @@ impl Memtables {
 
     pub fn get(&self, key: &Bytes) -> Option<Value> {
         for table in self.iter() {
-            if let Some(entry) = table.lookup(key) {
+            if let Some(entry) = table.lookup(key).filter(|entry| !entry.entry().is_tombstone()) {
                 return Some(entry.entry().val.clone());
             }
         } 
@@ -75,6 +75,12 @@ impl Memtables {
 
     pub fn should_promote(&self) -> bool {
         self.active.byte_size() > self.config.size_threshold
+    }
+
+    pub fn try_promote(&mut self) {
+        if self.should_promote() { 
+            self.new_table();
+        }
     }
 
     fn iter(&self) -> MemtablesIter {

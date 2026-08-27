@@ -30,6 +30,25 @@ impl Entry {
         }
     }
 
+    pub fn new_with_sequence(key: Bytes, value: Bytes, metadata: u8, sequence: u64) -> Entry {
+        Entry {
+            key,
+            val: Value {
+                value,
+                metadata,
+                sequence_number: sequence,
+            }
+        }
+    }
+
+    pub fn set_sequence_number(&mut self, sequence_number: u64) {
+        self.val.sequence_number = sequence_number;
+    }
+
+    pub fn set_tombstone(&mut self) {
+        self.val.metadata |= TOMBSTONE;
+    }
+
     pub fn is_tombstone(&self) -> bool {
         self.val.metadata & TOMBSTONE == 1
     }

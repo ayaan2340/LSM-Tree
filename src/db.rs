@@ -1,19 +1,67 @@
-use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{RwLock};
 use std::path::PathBuf;
-use crate::memtable::Memtable;
-use crate::entry::EntryComparator;
-use crate::skiplist::rng::SeededRng;
+use crate::memtables::Memtables;
+use crate::entry::{Entry, EntryComparator};
+use bytes::Bytes;
 
 pub struct Db {
     sequence_number: AtomicU64,
-    active_memtable: Arc<Memtable>,
+    memtables: RwLock<Memtables>,
     path: PathBuf,
+    config: DbConfig,
 }
 
+#[derive(Clone)]
 pub struct DbConfig {
-    pub max_height: usize,
-    pub size_threshold: usize,
-    pub comparator: EntryComparator,
-    pub seed: Option<u64>,
+    pub(crate) max_height: usize,
+    pub(crate) size_threshold: usize,
+    pub(crate) comparator: EntryComparator,
+    pub(crate) seed: Option<u64>,
+}
+
+impl Db {
+    pub fn open(path: PathBuf, config: DbConfig) -> Db {
+        Db {
+            sequence_number: AtomicU64::new(0),
+            memtables: RwLock::new(Memtables::open(config.clone())),
+            path,
+            config,
+        }
+    }
+
+    pub fn get(&self, key: &Bytes) -> Option<Bytes> {
+        let memtables = self.memtables.read().unwrap();
+        match memtables.get(key) {
+            Some(val) => Some(val.value),
+            None => None,
+        }
+    }
+
+    pub fn put(&self, key: Bytes, value: Bytes) {
+        let new_entry: Entry = Entry::new_with_sequence(key, value, 0, self.sequence_number.fetch_add(1, Ordering::SeqCst));
+        {
+            let memtables = self.memtables.read().unwrap();
+            memtables.insert(new_entry);
+        }
+
+        if self.memtables.read().unwrap().should_promote() {
+            let mut memtables = self.memtables.write().unwrap();
+            memtables.try_promote();
+        }
+    }
+
+    pub fn delete(&self, key: Bytes) {
+        let mut new_entry: Entry = Entry::new_with_sequence(key, Bytes::new(), 0, self.sequence_number.fetch_add(1, Ordering::SeqCst));
+        new_entry.set_tombstone();
+        {
+            let memtables = self.memtables.read().unwrap();
+            memtables.insert(new_entry);
+        }
+
+        if self.memtables.read().unwrap().should_promote() {
+            let mut memtables = self.memtables.write().unwrap();
+            memtables.try_promote();
+        }
+    }
 }
