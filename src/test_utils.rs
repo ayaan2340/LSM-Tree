@@ -1,6 +1,8 @@
 use std::sync::Arc;
+use std::path::PathBuf;
 use bytes::Bytes;
 use crate::comparator::BytewiseComparator;
+use crate::db::{Db, DbConfig};
 use crate::entry::{Entry, EntryComparator, Value};
 use crate::memtable::Memtable;
 use crate::skiplist::SkipList;
@@ -35,4 +37,17 @@ pub(crate) fn make_skiplist() -> SkipList {
 
 pub(crate) fn make_memtable(id: u64) -> Memtable {
     Memtable::new(id, DEFAULT_MAX_HEIGHT, make_comparator(), SeededRng::new(DEFAULT_SEED))
+}
+
+pub(crate) fn make_db_config(size_threshold: usize) -> DbConfig {
+    DbConfig {
+        max_height: DEFAULT_MAX_HEIGHT,
+        size_threshold,
+        comparator: make_comparator(),
+        seed: Some(DEFAULT_SEED),
+    }
+}
+
+pub(crate) fn make_db(size_threshold: usize) -> Db {
+    Db::open(PathBuf::from("/tmp/lsm_test"), make_db_config(size_threshold))
 }

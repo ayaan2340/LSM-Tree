@@ -65,3 +65,158 @@ impl Db {
         }
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use crate::test_utils::make_db;
+
+    #[test]
+    fn put_and_get_basic() {
+        let db = make_db(usize::MAX);
+        db.put(Bytes::from("key"), Bytes::from("value"));
+        assert_eq!(db.get(&Bytes::from("key")), Some(Bytes::from("value")));
+    }
+
+    #[test]
+    fn get_missing_key_returns_none() {
+        let db = make_db(usize::MAX);
+        assert_eq!(db.get(&Bytes::from("missing")), None);
+    }
+
+    #[test]
+    fn put_same_key_twice_returns_latest_value() {
+        let db = make_db(usize::MAX);
+        db.put(Bytes::from("key"), Bytes::from("v1"));
+        db.put(Bytes::from("key"), Bytes::from("v2"));
+        assert_eq!(db.get(&Bytes::from("key")), Some(Bytes::from("v2")));
+    }
+
+    #[test]
+    fn delete_makes_key_invisible() {
+        let db = make_db(usize::MAX);
+        db.put(Bytes::from("key"), Bytes::from("value"));
+        db.delete(Bytes::from("key"));
+        assert_eq!(db.get(&Bytes::from("key")), None);
+    }
+
+    #[test]
+    fn delete_nonexistent_key_is_noop() {
+        let db = make_db(usize::MAX);
+        db.delete(Bytes::from("ghost"));
+        assert_eq!(db.get(&Bytes::from("ghost")), None);
+    }
+
+    #[test]
+    fn put_after_delete_restores_key() {
+        let db = make_db(usize::MAX);
+        db.put(Bytes::from("key"), Bytes::from("v1"));
+        db.delete(Bytes::from("key"));
+        db.put(Bytes::from("key"), Bytes::from("v2"));
+        assert_eq!(db.get(&Bytes::from("key")), Some(Bytes::from("v2")));
+    }
+
+    #[test]
+    fn all_keys_findable_after_promotion() {
+        let db = make_db(128);
+        for i in 0..50u32 {
+            db.put(Bytes::from(format!("key{i}")), Bytes::from(format!("val{i}")));
+        }
+        for i in 0..50u32 {
+            assert_eq!(
+                db.get(&Bytes::from(format!("key{i}"))),
+                Some(Bytes::from(format!("val{i}")))
+            );
+        }
+    }
+
+    #[test]
+    fn delete_survives_promotion() {
+        let db = make_db(128);
+        db.put(Bytes::from("target"), Bytes::from("value"));
+        db.delete(Bytes::from("target"));
+        for i in 0..50u32 {
+            db.put(Bytes::from(format!("filler{i}")), Bytes::from(format!("val{i}")));
+        }
+        assert_eq!(db.get(&Bytes::from("target")), None);
+    }
+
+    #[test]
+    fn concurrent_puts_all_visible() {
+        let db = Arc::new(make_db(usize::MAX));
+        let mut handles = vec![];
+
+        for i in 0..20u32 {
+            let db = Arc::clone(&db);
+            handles.push(std::thread::spawn(move || {
+                db.put(Bytes::from(format!("key{i}")), Bytes::from(format!("val{i}")));
+            }));
+        }
+
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        for i in 0..20u32 {
+            assert!(
+                db.get(&Bytes::from(format!("key{i}"))).is_some(),
+                "key{i} missing after concurrent puts"
+            );
+        }
+    }
+
+    #[test]
+    fn concurrent_puts_and_gets_no_panic() {
+        let db = Arc::new(make_db(usize::MAX));
+
+        for i in 0..10u32 {
+            db.put(Bytes::from(format!("pre{i}")), Bytes::from(format!("val{i}")));
+        }
+
+        let mut handles = vec![];
+
+        for i in 10..20u32 {
+            let db = Arc::clone(&db);
+            handles.push(std::thread::spawn(move || {
+                db.put(Bytes::from(format!("key{i}")), Bytes::from(format!("val{i}")));
+            }));
+        }
+
+        for i in 0..10u32 {
+            let db = Arc::clone(&db);
+            handles.push(std::thread::spawn(move || {
+                let _ = db.get(&Bytes::from(format!("pre{i}")));
+            }));
+        }
+
+        for h in handles {
+            h.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn concurrent_puts_with_promotion() {
+        let db = Arc::new(make_db(128));
+        let mut handles = vec![];
+
+        for i in 0..50u32 {
+            let db = Arc::clone(&db);
+            handles.push(std::thread::spawn(move || {
+                db.put(Bytes::from(format!("key{i}")), Bytes::from(format!("val{i}")));
+            }));
+        }
+
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        for i in 0..50u32 {
+            assert!(
+                db.get(&Bytes::from(format!("key{i}"))).is_some(),
+                "key{i} missing after concurrent puts with promotion"
+            );
+        }
+    }
+}

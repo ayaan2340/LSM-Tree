@@ -7,6 +7,7 @@ pub mod memtable;
 pub mod memtables;
 pub mod db;
 pub mod iterator;
+pub mod sstable;
 
 #[cfg(test)]
 pub mod test_utils;
